@@ -1,0 +1,141 @@
+#!/bin/bash
+
+## Paths and definitions
+tc=/sbin/tc
+ext=eth0		# Change for your device!
+ext_ingress=ifb0	# Use a unique ifb per rate limiter!
+			# Set these as per your provider's settings, at 90% to start with
+
+# some of the auto-generated values are based on mbit values, and that's probably fine to assume these days.
+scale=mbit
+
+up_rate=1000		# these must be the same scale!
+down_rate=1000	 
+
+# this is a wild stab for GBit
+q=9270                  # HTB Quantum = 1500bytes IP + 14 bytes ethernet.
+			# Higher bandwidths may require a higher htb quantum. MEASURE.
+			# Some ADSL devices might require a stab setting.
+
+
+####################################
+
+rate=$(( $up_rate > $down_rate ? $up_rate : $down_rate ))
+
+if [ $rate -lt 50 ]
+then
+	quantum=300		# fq_codel quantum 300 gives a boost to interactive flows
+				# At higher bandwidths (50Mbit+) don't bother
+fi
+
+# manually tested values; rate=10m:r2q=6, rate=100m:r2q=63, rate=500m:r2q=313, rate=1gbit:r2q=625 -- gives us a curve!
+r2q=$(echo "( -0.000001111 * ($rate^2) ) + ( 0.6257 * $rate ) + 0.4444" | bc)
+r2q=${r2q%%.*}		# it's possible we could be off-by-one occasionally due to rounding, but whatever.
+
+pre_flight() {
+	if [ -z "$(lsmod | grep ifb)" ]
+	then
+		modprobe ifb
+		modprobe sch_fq_codel
+		modprobe act_mirred
+	fi
+
+	  # Also turn of gro on ALL interfaces 
+	  # e.g ethtool -K eth1 gro off if you have eth1
+	  # some devices you may need to run these 
+	  # commands independently
+	ethtool -K $ext tso off gso off gro off 2>&1 | grep -vi "Cannot change"
+
+	# increase the TX queue length for higher speeds...
+	txqlen=$(ifconfig -v $ext | grep txqueuelen | sed 's/.*txqueuelen:\([0-9]\+\).*/\1/g;')
+	if [ ${txqlen:-0} -lt 1000 -a $rate -ge 250 ]
+	then
+		ifconfig $ext txqueuelen 1000
+	fi
+}
+
+unload() {
+	rmmod ifb sch_htb sch_ingress sch_fq_codel cls_flow cls_u32 act_mirred
+}
+
+# Clear old queuing disciplines (qdisc) on the interfaces
+egress_down()
+{
+	$tc qdisc del dev $ext root 2>/dev/null
+	$tc qdisc del dev $ext ingress 2>/dev/null
+}
+
+ingress_down()
+{
+	$tc qdisc del dev $ext_ingress root 2>/dev/null
+	$tc qdisc del dev $ext_ingress ingress 2>/dev/null
+}
+
+#########
+# INGRESS
+#########
+
+ingress_up()
+{
+	# Create ingress on external interface
+	$tc qdisc add dev $ext handle ffff: ingress
+
+	ifconfig $ext_ingress up # if the interace is not up bad things happen
+
+	# Forward all ingress traffic to the IFB device
+	$tc filter add dev $ext parent ffff: protocol all u32 match u32 0 0 action mirred egress redirect dev $ext_ingress
+
+	# Create an EGRESS filter on the IFB device
+	$tc qdisc add dev $ext_ingress root handle 1: htb default 11 ${r2q:+r2q $r2q}
+
+	# Add root class HTB with rate limiting
+	$tc class add dev $ext_ingress parent 1: classid 1:1 htb rate ${down_rate}${scale}
+	$tc class add dev $ext_ingress parent 1:1 classid 1:11 htb rate ${down_rate}${scale} prio 0 ${q:+quantum $q}
+
+	# Add FQ_CODEL qdisc with ECN support (if you want ecn)
+	$tc qdisc add dev $ext_ingress parent 1:11 fq_codel ${quantum:+quantum $quantum} noecn
+}
+
+#########
+# EGRESS
+#########
+egress_up()
+{
+	# Add FQ_CODEL to EGRESS on external interface
+	$tc qdisc add dev $ext root handle 1: htb default 11 ${r2q:+r2q $r2q}
+
+	# Add root class HTB with rate limiting
+	$tc class add dev $ext parent 1: classid 1:1 htb rate ${up_rate}${scale}
+	$tc class add dev $ext parent 1:1 classid 1:11 htb rate ${up_rate}${scale} prio 0 ${q:+quantum $q}
+
+	# Note: You can apply a packet limit here and on ingress if you are memory constrained - e.g
+	# for low bandwidths and machines with < 64MB of ram, limit 1000 is good, otherwise no point
+
+	# Add FQ_CODEL qdisc without ECN support - on egress it's generally better to just drop the packet
+	# but feel free to enable it if you want.
+
+	$tc qdisc add dev $ext parent 1:11 fq_codel ${quantum:+quantum $quantum} noecn
+}
+
+stats() {
+	$tc -s qdisc show dev $ext 2>/dev/null
+	$tc -s filter show dev $ext parent ffff: 2>/dev/null
+	$tc -s -d class show dev $ext_ingress 2>/dev/null
+}
+
+case "$1" in
+	start|restart) pre_flight; egress_down; ingress_down; ingress_up; egress_up
+		;;
+	stop) egress_down; ingress_down
+		;;
+	start_ingress) pre_flight; ingress_down; ingress_up
+		;;
+	start_egress) pre_flight; egress_down; egress_up
+		;;
+	flush) egress_down; ingress_down; unload;
+		;;
+	status) stats
+		;;
+	*) echo "$0 [start|stop]{_ingress|_egress} | restart | flush"
+		;;
+esac
