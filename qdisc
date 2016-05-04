@@ -7,30 +7,51 @@ ext_ingress=ifb0	# Use a unique ifb per rate limiter!
 			# Set these as per your provider's settings, at 90% to start with
 
 # some of the auto-generated values are based on mbit values, and that's probably fine to assume these days.
-scale=mbit
+scale=kbit
 
-up_rate=1000		# these must be the same scale!
-down_rate=1000	 
+up_rate=256		# these must be the same scale!
+down_rate=256
 
-# this is a wild stab for GBit
-q=9270                  # HTB Quantum = 1500bytes IP + 14 bytes ethernet.
-			# Higher bandwidths may require a higher htb quantum. MEASURE.
-			# Some ADSL devices might require a stab setting.
-
+DEBUG=0
 
 ####################################
 
+if [ -n "$DEBUG" -a $DEBUG -gt 0 ]
+then
+	tc="echo $tc"
+fi
+
 rate=$(( $up_rate > $down_rate ? $up_rate : $down_rate ))
 
-if [ $rate -lt 50 ]
+# this is a wild stab for GBit
+q=1514
+if [ "${scale[0]}" = "m" -o "${scale[0]}" = "g" ]
+then
+	if [ $rate -gt 100 -a "${scale[0]}" = "m" ]
+	then
+		q=4470
+	elif [ \( $rate -gt 1000 -a "${scale[0]}" = "m" \) -o "${scale[0]}" = "g" ]
+	then
+		q=9270                  # HTB Quantum = 1500bytes IP + 14 bytes ethernet.
+					# Higher bandwidths may require a higher htb quantum. MEASURE.
+					# Some ADSL devices might require a stab setting.
+	fi
+fi
+
+if [ \( $rate -ge 50 -a "${scale[0]}" = "m" \) -o "${scale[0]}" = "g" ]
 then
 	quantum=300		# fq_codel quantum 300 gives a boost to interactive flows
 				# At higher bandwidths (50Mbit+) don't bother
 fi
 
 # manually tested values; rate=10m:r2q=6, rate=100m:r2q=63, rate=500m:r2q=313, rate=1gbit:r2q=625 -- gives us a curve!
-r2q=$(echo "( -0.000001111 * ($rate^2) ) + ( 0.6257 * $rate ) + 0.4444" | bc)
-r2q=${r2q%%.*}		# it's possible we could be off-by-one occasionally due to rounding, but whatever.
+if [ "${scale[0]}" = "m" -o "${scale[0]}" = "g" ]
+then
+	r2q=$(echo "( -0.000001111 * ($rate^2) ) + ( 0.6257 * $rate ) + 0.4444" | bc)
+	r2q=${r2q%%.*}		# it's possible we could be off-by-one occasionally due to rounding, but whatever.
+else
+	unset r2q
+fi
 
 pre_flight() {
 	if [ -z "$(lsmod | grep ifb)" ]
