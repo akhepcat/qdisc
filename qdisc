@@ -4,17 +4,21 @@
 tc=/sbin/tc
 ext=eth0		# Change for your device!
 ext_ingress=ifb0	# Use a unique ifb per rate limiter!
-			# Set these as per your provider's settings, at 90% to start with
 
-# some of the auto-generated values are based on mbit values, and that's probably fine to assume these days.
+# Set these as per your provider's settings, at 90% to start with
 scale=kbit
 
-up_rate=256		# these must be the same scale!
+# these must be the same scale!
+up_rate=256
 down_rate=256
 
 DEBUG=0
 
 ####################################
+
+[[ -r /etc/qdisc.conf ]] && . /etc/qdisc.conf
+[[ -r /etc/default/qdisc ]] && . /etc/default/qdisc
+
 
 if [ -n "$DEBUG" -a $DEBUG -gt 0 ]
 then
@@ -49,6 +53,9 @@ if [ "${scale[0]}" = "m" -o "${scale[0]}" = "g" ]
 then
 	r2q=$(echo "( -0.000001111 * ($rate^2) ) + ( 0.6257 * $rate ) + 0.4444" | bc)
 	r2q=${r2q%%.*}		# it's possible we could be off-by-one occasionally due to rounding, but whatever.
+
+	# the default is 10, so if the math set it below 10, just kill the auto-set
+	[[ ${r2q} -lt 10 ]] && unset r2q
 else
 	unset r2q
 fi
