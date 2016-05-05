@@ -152,7 +152,7 @@ stats() {
 }
 
 case "$1" in
-	start|restart) pre_flight; egress_down; ingress_down; ingress_up; egress_up
+	start|restart) pre_flight; egress_down; ingress_down; ingress_up; egress_up; stats
 		;;
 	stop) egress_down; ingress_down
 		;;
@@ -164,6 +164,6 @@ case "$1" in
 		;;
 	status) stats
 		;;
-	*) echo "$0 [start|stop]{_ingress|_egress} | restart | flush"
+	*) echo "$0 [start|stop]{_ingress|_egress} | restart | flush | status"
 		;;
 esac
