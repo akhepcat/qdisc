@@ -21,22 +21,23 @@ DEBUG=0
 [[ -r /etc/qdisc.conf ]] && . /etc/qdisc.conf
 [[ -r /etc/default/qdisc ]] && . /etc/default/qdisc
 
-
 if [ -n "$DEBUG" -a $DEBUG -gt 0 ]
 then
 	tc="echo $tc"
+	set -x
 fi
 
 rate=$(( $up_rate > $down_rate ? $up_rate : $down_rate ))
+iscale=${scale:0:1}
 
 # this is a wild stab for GBit
 q=1514
-if [ "${scale[0]}" = "m" -o "${scale[0]}" = "g" ]
+if [ "${iscale}" = "m" -o "${iscale}" = "g" ]
 then
-	if [ $rate -gt 100 -a "${scale[0]}" = "m" ]
+	if [ $rate -gt 100 -a "${iscale}" = "m" ]
 	then
 		q=4470
-	elif [ \( $rate -gt 1000 -a "${scale[0]}" = "m" \) -o "${scale[0]}" = "g" ]
+	elif [ \( $rate -gt 1000 -a "${iscale}" = "m" \) -o "${iscale}" = "g" ]
 	then
 		q=9270                  # HTB Quantum = 1500bytes IP + 14 bytes ethernet.
 					# Higher bandwidths may require a higher htb quantum. MEASURE.
@@ -44,14 +45,14 @@ then
 	fi
 fi
 
-if [ \( $rate -ge 50 -a "${scale[0]}" = "m" \) -o "${scale[0]}" = "g" ]
+if [ \( $rate -ge 50 -a "${iscale}" = "m" \) -o "${iscale}" = "g" ]
 then
 	quantum=300		# fq_codel quantum 300 gives a boost to interactive flows
 				# At higher bandwidths (50Mbit+) don't bother
 fi
 
 # manually tested values; rate=10m:r2q=6, rate=100m:r2q=63, rate=500m:r2q=313, rate=1gbit:r2q=625 -- gives us a curve!
-if [ "${scale[0]}" = "m" -o "${scale[0]}" = "g" ]
+if [ "${iscale}" = "m" -o "${iscale}" = "g" ]
 then
 	r2q=$(echo "( -0.000001111 * ($rate^2) ) + ( 0.6257 * $rate ) + 0.4444" | bc)
 	r2q=${r2q%%.*}		# it's possible we could be off-by-one occasionally due to rounding, but whatever.
@@ -170,3 +171,9 @@ case "$1" in
 	*) echo "$0 [start|stop]{_ingress|_egress} | restart | flush | status"
 		;;
 esac
+
+if [ -n "$DEBUG" -a $DEBUG -gt 0 ]
+then
+	#only if we set it..., don't carry it out
+	set +x
+fi
