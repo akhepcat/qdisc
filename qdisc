@@ -14,6 +14,8 @@ down_rate=256
 
 DEBUG=0
 
+## head -n 16 qdisc | tail -n +3 > /etc/default/qdisc
+## and edit to your heart's content!
 ####################################
 
 [[ -r /etc/qdisc.conf ]] && . /etc/qdisc.conf
@@ -146,6 +148,7 @@ egress_up()
 }
 
 stats() {
+	[[ -z "$(lsmod | grep ifb)" ]] && echo -e "qdisc queueing not enabled, running kernel defaults\n"
 	$tc -s qdisc show dev $ext 2>/dev/null
 	$tc -s filter show dev $ext parent ffff: 2>/dev/null
 	$tc -s -d class show dev $ext_ingress 2>/dev/null
