@@ -176,7 +176,12 @@ egress_up()
 }
 
 stats() {
-	[[ -z "$(lsmod | grep ifb)" ]] && echo -e "qdisc queueing not enabled, running kernel defaults\n"
+	if [ -z "$(lsmod | grep ifb)" ]
+	then
+		echo -e "qdisc queueing not enabled, running kernel defaults\n"
+	else
+		echo -e "queuing enabled on ${ext}/${ext_ingress}\n"
+	fi
 	$tc -s qdisc show dev $ext 2>/dev/null
 	$tc -s filter show dev $ext parent ffff: 2>/dev/null
 	$tc -s -d class show dev $ext_ingress 2>/dev/null
