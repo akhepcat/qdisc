@@ -2,7 +2,7 @@
 
 ## Paths and definitions
 tc=/sbin/tc
-ext=eth0		# Change for your device!
+#ext=eth0		# Change for your device, or leave blank for automagic based on default route
 ext_ingress=ifb0	# Use a unique ifb per rate limiter!
 
 # Set these as per your provider's settings, at 90% to start with
@@ -25,6 +25,33 @@ if [ -n "$DEBUG" -a $DEBUG -gt 0 ]
 then
 	tc="echo $tc"
 	set -x
+fi
+
+#if we don't have an external interface defined, or if the supplied one is 'wrong'
+#try to guess it from the routing table.
+if [ -z "$(ip link show | grep ${ext:-ENOSUCHIFACE})" ]
+then
+	EXT_4IF="$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9]+[ \t]+00000000/ { print $1; exit }' /proc/net/route)"
+	EXT_6IF="$(awk 'BEGIN { IGNORECASE=1 } /^0+ 00 0+ 00/ && !/ffffffff/ { print $10; exit }' /proc/net/ipv6_route)"
+
+	if [ -z "${EXT_4IF//[^A-Za-z0-9]/}" ];
+	then
+	        # no default IPv4 interface.  Check for IPv6 first...
+	        if [ -z "${EXT_6IF//[^A-Za-z0-9]/}" ];
+	        then
+	                # no IPv6 interface either, so we can't really continue
+	                echo "No active network interface, bailing out"
+	                exit 1
+	        else
+	                # there's an IPv6 interface, so we'll use that in case IPv4 comes up later
+	                EXT_4IF="${EXT_6IF}"
+	        fi
+	else
+	        # IPv4 is okay, so we'll short-circuit our test and assignment
+	        EXT_6IF=${EXT_6IF:-$EXT_4IF}
+	fi
+
+	ext=${EXT_4IF:-$EXT_6IF}
 fi
 
 rate=$(( $up_rate > $down_rate ? $up_rate : $down_rate ))
