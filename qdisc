@@ -12,7 +12,7 @@ scale=kbit
 up_rate=256
 down_rate=256
 
-DEBUG=0
+DEBUG=${DEBUG:-0}
 
 ## head -n 16 qdisc | tail -n +3 > /etc/default/qdisc
 ## and edit to your heart's content!
@@ -57,6 +57,13 @@ fi
 rate=$(( $up_rate > $down_rate ? $up_rate : $down_rate ))
 iscale=${scale:0:1}
 
+ratio=$(( $down_rate / $up_rate ))
+if [ ${ratio:-1} -gt 10 -o ${ratio:-0} -eq 0 ]
+then
+	echo "ratio of download to upload (${down_rate}:${up_rate}) is greater than 10:1 (or zero)"
+	echo "you may see issues trying to reach your maximum bandwidth"
+fi
+
 # this is a wild stab for GBit
 q=1514
 if [ "${iscale}" = "m" -o "${iscale}" = "g" ]
@@ -72,7 +79,7 @@ then
 	fi
 fi
 
-if [ \( $rate -ge 50 -a "${iscale}" = "m" \) -o "${iscale}" = "g" ]
+if [ ! \( \( $rate -ge 50 -a "${iscale}" = "m" \) -o "${iscale}" = "g" \) ]
 then
 	quantum=300		# fq_codel quantum 300 gives a boost to interactive flows
 				# At higher bandwidths (50Mbit+) don't bother
