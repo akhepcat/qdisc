@@ -98,9 +98,20 @@ else
 fi
 
 pre_flight() {
+	ifaces=$(ip link show | grep -vE 'noop|noqueue|ifb|master' | grep BROADCAST | cut -f 2 -d: | wc -l)
+	ifaces=$((ifaces + 2))	# Breathing room,
+
+	if [ -n "$(lsmod | grep ifb)" ]
+	then
+		numifbs=$(ip link show | grep -E 'ifb[0-9]' | wc -l )
+		if [ ${numifbs:-0} -lt ${ifaces:-2} ]
+		then
+			unload
+		fi
+	fi
 	if [ -z "$(lsmod | grep ifb)" ]
 	then
-		modprobe ifb
+		modprobe ifb numifbs=${ifaces:-2}
 		modprobe sch_fq_codel
 		modprobe act_mirred
 	fi
