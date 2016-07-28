@@ -1,0 +1,52 @@
+#!/bin/bash
+
+IFACE=$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9]+[ \t]+00000000/ { print $1 }' /proc/net/route)
+
+if [ ${IFACE//[0-9]/} = "br" ]
+then
+   #br0             8000.0026b98c7d4d       no              eth0
+   IFACE=$(brctl show ${IFACE} 2>&1 | grep -i ${IFACE} | awk '{print $4}')
+fi
+
+if [ ${IFACE//[0-9]/} = "wlan" ]
+then
+   RATE=$(iwconfig $IFACE 2>&1 | grep -i rate | cut -f 2 -d= | awk '{print $1$2}')
+else
+   RATE=$(ethtool $IFACE 2>&1 | grep -w Speed | awk '{print $2}' )
+fi
+
+# IFACE: wlan0   RATE: 195.1Mb/s
+
+RATE=${RATE//\/s/}
+
+SPEED=${RATE//[MKGb]/}
+SPEED=${SPEED//\.*/}
+SPEED=${SPEED//Unknown!/10}
+
+SCALE=${RATE//[0-9.]/}
+
+if [ -f /etc/default/qdisc ]
+then
+	echo "adjusting permanent config in /etc/default/qdisc"
+	sed -i "s/ext=.*/ext=${IFACE}/; s/scale=.*/scale=${SCALE,,}it/; s/up_rate=.*/up_rate=${SPEED}/; s/down_rate=.*/down_rate=${SPEED}/;" /etc/default/qdisc
+else
+	echo "installing permanent config in /etc/default/qdisc"
+
+	cat >/etc/default/qdisc <<EOF
+## Paths and definitions
+tc=/sbin/tc
+ext=${IFACE}
+ext_ingress=ifb0        # Use a unique ifb per rate limiter!
+
+# Set these as per your provider's settings, at 90% to start with
+scale=${SCALE,,}it
+# these must be the same scale!
+up_rate=${SPEED}
+down_rate=${SPEED}
+
+# DEBUG=0
+EOF
+
+fi
+
+qdisc start
