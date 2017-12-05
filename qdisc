@@ -1,4 +1,16 @@
 #!/bin/bash
+### BEGIN INIT INFO
+# Provides:          qdisc
+# Required-Start:    mountkernfs $local_fs $network $syslog $networking $ifupdown
+# Required-Stop:     $local_fs
+# X-Start-Before:    $vboxdrv $virtualbox $libvirt-bin $libvirtd $vmware $fail2ban
+# X-Stop-After:      $network
+# Default-Start:     S 1 2 3 4 5
+# Default-Stop:      0 6
+# Short-Description: provides qos tuning
+# Description:       sets up multiple QoS tuning parameters for enhanced network performance
+### END INIT INFO
+
 
 ## Paths and definitions
 tc=/sbin/tc
@@ -14,9 +26,46 @@ down_rate=256
 
 DEBUG=${DEBUG:-0}
 
-## head -n 16 qdisc | tail -n +3 > /etc/default/qdisc
+## head -n 26 qdisc | tail -n +13 > /etc/default/qdisc
 ## and edit to your heart's content!
 ####################################
+
+## for LSB init-style startup
+[[ -r /lib/lsb/init-functions ]] && test run_by_init && . /lib/lsb/init-functions
+# Are we running from init?
+run_by_init() {
+        if [ -n "${previous}" -a -n "${runlevel}" ]
+        then
+                return 0
+        else
+                return 1
+        fi
+}
+lsb_log_begin() {
+        MSG="$*"
+        run_by_init && log_action_begin_msg "${MSG}" "${PROG}" || echo "BEGIN: ${MSG}"
+}
+
+lsb_log_end() {
+        MSG="$*"
+        run_by_init && log_action_end_msg "${MSG}" "${PROG}" || echo "END: ${MSG}"
+}
+
+lsb_log_fail() {
+        MSG="$*"
+        run_by_init && log_failure_msg "${MSG}" "${PROG}" || echo "FAIL: ${MSG}"
+}
+
+lsb_log_ok() {
+        MSG="$*"
+        run_by_init && log_success_msg "${MSG}" "${PROG}" || echo "SUCCESS: ${MSG}"
+}
+
+lsb_msg() {
+        MSG="$*"
+        run_by_init && log_action_msg "${MSG}" || echo "${MSG}"
+}
+
 
 [[ -r /etc/qdisc.conf ]] && . /etc/qdisc.conf
 [[ -r /etc/default/qdisc ]] && . /etc/default/qdisc
@@ -123,8 +172,8 @@ pre_flight() {
 	ethtool -K $ext tso off gso off gro off 2>&1 | grep -vi "Cannot change"
 
 	# increase the TX queue length for higher speeds...
-	txqlen=$(ifconfig -v $ext | grep txqueuelen | sed 's/.*txqueuelen.\([0-9]\+\).*/\1/g;')
-	if [ ${txqlen:-0} -lt 1000 -a ${rate} -ge 250 ]
+	txqlen=$(ifconfig -v $ext | grep txqueuelen | sed 's/.*txqueuelen:\([0-9]\+\).*/\1/g;')
+	if [ ${txqlen:-0} -lt 1000 -a $rate -ge 250 ]
 	then
 		ifconfig $ext txqueuelen 1000
 	fi
@@ -206,15 +255,15 @@ stats() {
 }
 
 case "$1" in
-	start|restart) pre_flight; egress_down; ingress_down; ingress_up; egress_up; stats
+	start|restart) lsb_log_begin "starting";pre_flight; egress_down; ingress_down; ingress_up; egress_up; stats; lsb_log_end 0;
 		;;
-	stop) egress_down; ingress_down
+	stop) lsb_log_begin "stopping";egress_down; ingress_down; lsb_log_end 0;
 		;;
-	start_ingress) pre_flight; ingress_down; ingress_up
+	start_ingress) lsb_log_begin "starting ingress only";pre_flight; ingress_down; ingress_up; lsb_log_end 0;
 		;;
-	start_egress) pre_flight; egress_down; egress_up
+	start_egress) lsb_log_begin "starting egress only";pre_flight; egress_down; egress_up; lsb_log_end 0;
 		;;
-	flush) egress_down; ingress_down; unload;
+	flush) lsb_log_begin "flushing";egress_down; ingress_down; unload; lsb_log_end 0;
 		;;
 	status) stats
 		;;
