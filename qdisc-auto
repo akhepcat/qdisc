@@ -1,7 +1,12 @@
 #!/bin/bash
 
+[[ -n "$*" ]] && DEBUG=1
+
+[[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: in debug mode, will not auto-start qdisc"
+
 IFACE=$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9]+[ \t]+00000000/ { print $1 }' /proc/net/route)
 
+[[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: discovered interface ${IFACE}"
 if [ ${IFACE//[0-9]/} = "br" ]
 then
    #br0             8000.0026b98c7d4d       no              eth0
@@ -24,6 +29,8 @@ SPEED=${SPEED//\.*/}
 SPEED=${SPEED//Unknown!/10}
 
 SCALE=${RATE//[0-9.]/}
+
+[[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: interface rate might be ${SPEED} ${SCALE}"
 
 if [ -f /etc/default/qdisc ]
 then
@@ -49,4 +56,5 @@ EOF
 
 fi
 
-qdisc start
+
+[[ ${DEBUG:-0} -ne 1 ]] && qdisc start
