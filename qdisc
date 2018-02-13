@@ -172,8 +172,8 @@ pre_flight() {
 	ethtool -K $ext tso off gso off gro off 2>&1 | grep -vi "Cannot change"
 
 	# increase the TX queue length for higher speeds...
-	txqlen=$(ifconfig -v $ext | grep txqueuelen | sed 's/.*txqueuelen:\([0-9]\+\).*/\1/g;')
-	if [ ${txqlen:-0} -lt 1000 -a $rate -ge 250 ]
+	txqlen=$(ifconfig -v $ext | grep txqueuelen | sed 's/.*txqueuelen[: ]\([0-9]\+\).*/\1/g;')
+	if [ ${txqlen:-0} -lt 1000 -a ${rate:-0} -ge 250 ]
 	then
 		ifconfig $ext txqueuelen 1000
 	fi
