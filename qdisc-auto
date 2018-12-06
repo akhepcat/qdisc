@@ -13,7 +13,7 @@ then
    IFACE=$(brctl show ${IFACE} 2>&1 | grep -i ${IFACE} | awk '{print $4}')
 fi
 
-if [ ${IFACE//[0-9]/} = "wlan" ]
+if [ ${IFACE//[0-9]/} = "wlan" -o "${IFACE##wlp*}wlan" = "wlan"   ]
 then
    RATE=$(iwconfig $IFACE 2>&1 | grep -i rate | cut -f 2 -d= | awk '{print $1$2}')
 else
