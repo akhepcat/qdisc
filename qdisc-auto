@@ -1,10 +1,14 @@
 #!/bin/bash
+# (c) 2016 Leif Sawyer
+# License: GPL 3.0 (see https://github.com/akhepcat/)
+# Permanent home:  https://github.com/akhepcat/qdisc/
+# Direct download: https://raw.githubusercontent.com/akhepcat/qdisc/master/qdisc
 
 [[ -n "$*" ]] && DEBUG=1
 
 [[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: in debug mode, will not auto-start qdisc"
 
-IFACE=$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9]+[ \t]+00000000/ { print $1 }' /proc/net/route)
+IFACE=$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9:.-]+[ \t]+00000000/ { print $1 }' /proc/net/route)
 
 [[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: discovered interface ${IFACE}"
 if [ ${IFACE//[0-9]/} = "br" ]
@@ -32,14 +36,31 @@ SCALE=${RATE//[0-9.]/}
 
 [[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: interface rate might be ${SPEED} ${SCALE}"
 
-if [ -f /etc/default/qdisc ]
+if [ -f /etc/default/qdisc -a ${DEBUG:-0} -eq 0 ]
 then
 	echo "adjusting permanent config in /etc/default/qdisc"
 	sed -i "s/ext=.*/ext=${IFACE}/; s/scale=.*/scale=${SCALE,,}it/; s/up_rate=.*/up_rate=${SPEED}/; s/down_rate=.*/down_rate=${SPEED}/;" /etc/default/qdisc
-else
+elif [ ${DEBUG:-0} -eq 0 ]
+then
 	echo "installing permanent config in /etc/default/qdisc"
 
 	cat >/etc/default/qdisc <<EOF
+## Paths and definitions
+tc=/sbin/tc
+ext=${IFACE}
+ext_ingress=ifb0        # Use a unique ifb per rate limiter!
+
+# Set these as per your provider's settings, at 90% to start with
+scale=${SCALE,,}it
+# these must be the same scale!
+up_rate=${SPEED}
+down_rate=${SPEED}
+
+# DEBUG=0
+EOF
+else
+	echo "in debug mode, not changing config"
+	cat <<EOF
 ## Paths and definitions
 tc=/sbin/tc
 ext=${IFACE}
