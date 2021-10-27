@@ -84,8 +84,8 @@ fi
 #try to guess it from the routing table.
 if [ -z "$(ip link show | grep ${ext:-ENOSUCHIFACE})" ]
 then
-	EXT_4IF="$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9]+[ \t]+00000000/ { print $1; exit }' /proc/net/route)"
-	EXT_6IF="$(awk 'BEGIN { IGNORECASE=1 } /^0+ 00 0+ 00/ && !/ffffffff/ { print $10; exit }' /proc/net/ipv6_route)"
+	EXT_4IF=$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9:.-]+[ \t]+00000000/ { print $1 }' /proc/net/route 2>/dev/null | head -1)
+	EXT_6IF=$(awk 'BEGIN { IGNORECASE=1 } /^00000000000000000000000000000000 00 00000000000000000000000000000000 00 / { if(!/lo/) print $10}' /proc/net/ipv6_route 2>/dev/null | head -1)
 
 	if [ -z "${EXT_4IF//[^A-Za-z0-9]/}" ];
 	then
