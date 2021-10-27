@@ -10,6 +10,10 @@
 # Short-Description: provides qos tuning
 # Description:       sets up multiple QoS tuning parameters for enhanced network performance
 ### END INIT INFO
+# (c) 2016 Leif Sawyer
+# License: GPL 3.0 (see https://github.com/akhepcat/)
+# Permanent home:  https://github.com/akhepcat/qdisc/
+# Direct download: https://raw.githubusercontent.com/akhepcat/qdisc/master/qdisc
 
 
 ## Paths and definitions
@@ -26,7 +30,7 @@ down_rate=256
 
 DEBUG=${DEBUG:-0}
 
-## head -n 26 qdisc | tail -n +13 > /etc/default/qdisc
+## head -n 32 qdisc | tail -n +19 > /etc/default/qdisc
 ## and edit to your heart's content!
 ####################################
 
