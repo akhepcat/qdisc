@@ -28,9 +28,12 @@ scale=kbit
 up_rate=256
 down_rate=256
 
+# sysctl net.core.default_qdisc  != fq_codel
+qdisc=fq
+
 DEBUG=${DEBUG:-0}
 
-## head -n 32 qdisc | tail -n +19 > /etc/default/qdisc
+## head -n 35 qdisc | tail -n +18 > /etc/default/qdisc
 ## and edit to your heart's content!
 ####################################
 
@@ -69,7 +72,6 @@ lsb_msg() {
         MSG="$*"
         run_by_init && log_action_msg "${MSG}" || echo "${MSG}"
 }
-
 
 [[ -r /etc/qdisc.conf ]] && . /etc/qdisc.conf
 [[ -r /etc/default/qdisc ]] && . /etc/default/qdisc
@@ -184,6 +186,7 @@ pre_flight() {
 }
 
 unload() {
+	[[ -n "${qdisc}" ]] && sysctl net.core.default_qdisc=${qdisc}
 	rmmod ifb sch_htb sch_ingress sch_fq_codel cls_flow cls_u32 act_mirred
 }
 
