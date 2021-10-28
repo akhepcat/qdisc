@@ -8,6 +8,9 @@
 
 [[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: in debug mode, will not auto-start qdisc"
 
+# try to grab the OS's default queuing mechanism, but make sure it's not fq_codel, for restoration cleanup on qdisc shutdown
+QUER=$(sysctl net.core.default_qdisc 2>/dev/null| sed 's/^.*= //g;' | grep -v fq_codel)
+
 IFACE=$(awk 'BEGIN { IGNORECASE=1 } /^[a-z0-9:.-]+[ \t]+00000000/ { print $1 }' /proc/net/route)
 
 [[ ${DEBUG:-0} -eq 1 ]] && echo "qdisc-auto: discovered interface ${IFACE}"
@@ -23,6 +26,7 @@ then
 else
    RATE=$(ethtool $IFACE 2>&1 | grep -w Speed | awk '{print $2}' )
 fi
+
 
 # IFACE: wlan0   RATE: 195.1Mb/s
 
@@ -56,6 +60,9 @@ scale=${SCALE,,}it
 up_rate=${SPEED}
 down_rate=${SPEED}
 
+# sysctl net.core.default_qdisc != fq_codel
+qdisc=${QUER}
+
 # DEBUG=0
 EOF
 else
@@ -71,6 +78,9 @@ scale=${SCALE,,}it
 # these must be the same scale!
 up_rate=${SPEED}
 down_rate=${SPEED}
+
+# sysctl net.core.default_qdisc  != fq_codel
+qdisc=${QUER}
 
 # DEBUG=0
 EOF
